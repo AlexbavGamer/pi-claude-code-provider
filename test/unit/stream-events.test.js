@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as piAi from "@earendil-works/pi-ai";
 import {
-    AssistantMessageFrameEncoder,
     createAssistantMessageEventStream,
     isContextOverflow,
     isRecoverableLength,
     isRetryableAssistantError,
-    reduceAssistantMessageFrames,
 } from "@earendil-works/pi-ai";
+// Pi-AI 1.3.0 removed the frame encoder and reducer; those checks run only where they exist.
+const { AssistantMessageFrameEncoder, reduceAssistantMessageFrames } = piAi;
+const HAS_FRAMES = typeof AssistantMessageFrameEncoder === "function" && typeof reduceAssistantMessageFrames === "function";
 import { ClaudeEventMapper as EventMapper, argumentPreviewDue } from "../../src/stream-events.ts";
 import { createOutput } from "../../src/output.ts";
 import { PROVIDER_INIT_FIELDS, initRecord as claudeInitRecord, streamRecoveryRecords, toolUseEvents } from "../support/claude-fixture.js";
@@ -870,11 +872,11 @@ async function replayCapture(scenario) {
     // `partial` is a shared live accumulator, so encoding each event as it arrives and
     // encoding the whole stream afterwards are genuinely different inputs to Pi's
     // encoder. Both orders must produce frames its reducer accepts.
-    const liveEncoder = new AssistantMessageFrameEncoder();
+    const liveEncoder = HAS_FRAMES ? new AssistantMessageFrameEncoder() : undefined;
     const liveFrames = [];
     const consume = (async () => {
         for await (const event of stream) {
-            const frame = liveEncoder.encode(event);
+            const frame = liveEncoder?.encode(event);
             if (frame)
                 liveFrames.push(frame);
             events.push(event);
@@ -1126,7 +1128,7 @@ test("accepts the output-limit handoff acknowledgement and fails closed on near 
         assert.equal((await stream.result()).stopReason, "error", entry.name);
     }
 });
-test("replays every captured scenario through Pi's own frame encoder and reducer", async () => {
+test("replays every captured scenario through Pi's own frame encoder and reducer", { skip: !HAS_FRAMES }, async () => {
     // Pi's assistant events are append-only. Rewriting published content to reuse a
     // recovered stream, as the rejected external fix did, makes these throw.
     for (const [scenario] of [...INTERRUPTED, ...REFUSED, ["http529"], ["post-stop"], ["tool-ok"], ["max-tokens"], ["context-window-exceeded"], ["prompt-too-long"]]) {
@@ -1145,7 +1147,7 @@ test("replays every captured scenario through Pi's own frame encoder and reducer
         assert.doesNotThrow(() => reduceAssistantMessageFrames(queuedFrames), `${scenario} (queued)`);
     }
 });
-test("a failure before the response starts still reduces through Pi's frames", async () => {
+test("a failure before the response starts still reduces through Pi's frames", { skip: !HAS_FRAMES }, async () => {
     // A setup failure -- a rejected initialization, an aborted request -- publishes
     // error and end with no preceding start. Every replay above begins with a
     // validated init, so this is the one shape they do not cover, and the
