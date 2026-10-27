@@ -29,6 +29,9 @@ const API = "pi-claude-code-provider-headless";
 const SEARCH_TOOL = "pi_claude_code_provider_web_search";
 const NOTICE_PREFIX = "[pi-claude-code-provider]";
 const MAX_TRACKED_RATE_LIMIT_NOTICES = 64;
+// PowerShell treats [ and ] in a path as wildcards, so cd/ls on a folder such as
+// [essentials] reports "path does not exist" unless the path is passed literally.
+const POWERSHELL_PATH_HINT = "\n\nWindows shell note: in PowerShell, `[` and `]` in a path are wildcards. For any path containing them, such as `[essentials]`, use `-LiteralPath` (`Set-Location -LiteralPath`, `Get-ChildItem -LiteralPath`, `Get-Content -LiteralPath`) instead of `cd path`, `ls path` or `cat path`, or escape the brackets.";
 
 export default async function piClaudeCodeProvider(pi: ExtensionAPI): Promise<void> {
   const runtimeCleanup = await cleanupStaleRuntimeDirectories();
@@ -138,6 +141,11 @@ export default async function piClaudeCodeProvider(pi: ExtensionAPI): Promise<vo
     if (pasted.images.length === 0) return { action: "continue" };
     nextImageNumber = pasted.next;
     return { action: "transform", text: pasted.text, images: [...(event.images ?? []), ...pasted.images] };
+  });
+
+  pi.on("before_agent_start", (event, ctx) => {
+    if (process.platform !== "win32" || ctx.model?.provider !== PROVIDER) return;
+    return { systemPrompt: event.systemPrompt + POWERSHELL_PATH_HINT };
   });
 
   pi.on("session_shutdown", async () => {
