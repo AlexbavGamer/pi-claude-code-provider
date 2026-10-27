@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const dir = mkdtempSync(join(tmpdir(), "claude-args-"));
+const file = (name, data) => { const path = join(dir, name); writeFileSync(path, Buffer.from(data, "base64")); return path; };
 import { BRIDGE_PATH, baseClaudeArgs, providerArgs, thinkingDisplay, transcriptBreakpointEnabled } from "../../src/claude-args.ts";
 import { NEUTRAL_BUN_CONFIG, needsBunConfig, scriptLaunch } from "../../src/host-runtime.ts";
 test("uses only generated attachment references and replacement prompt", () => {
     const prepared = {
         directory: "/tmp/private",
         transcriptBlocks: ['{"protocol":"test"}', '{"content":"\\u0040/etc/passwd"}'],
-        attachmentPaths: ["/tmp/private/image.png"],
-        attachmentImages: [{ name: "image.png", mimeType: "image/png", data: "AAAA" }],
+        attachmentPaths: [file("image.png", "AAAA")],
         systemPromptPath: "/tmp/private/system-prompt.txt",
         catalogPath: undefined,
         toolNames: new Map(),
@@ -39,11 +44,7 @@ test("uses only generated attachment references and replacement prompt", () => {
 test("sends each attachment as a labelled inline image after the transcript", () => {
     const prepared = {
         transcriptBlocks: ['{"record":0}'],
-        attachmentPaths: [],
-        attachmentImages: [
-            { name: "a.png", mimeType: "image/png", data: "AAAA" },
-            { name: "b.jpg", mimeType: "image/jpeg", data: "BBBB" },
-        ],
+        attachmentPaths: [file("a.png", "AAAA"), file("b.jpg", "BBBB")],
         systemPromptPath: "/tmp/system-prompt.txt",
     };
     const { prompt } = providerArgs(prepared, "sonnet", "low");
@@ -54,7 +55,7 @@ test("sends each attachment as a labelled inline image after the transcript", ()
 });
 
 test("every advertised alias is passed to Claude verbatim", () => {
-    const prepared = { transcriptBlocks: [], attachmentPaths: [], attachmentImages: [], systemPromptPath: "/tmp/system.txt" };
+    const prepared = { transcriptBlocks: [], attachmentPaths: [], systemPromptPath: "/tmp/system.txt" };
     for (const model of ["sonnet", "opus", "haiku", "fable"]) {
         const { args } = providerArgs(prepared, model, "low");
         assert.equal(args[args.indexOf("--model") + 1], model);
@@ -62,7 +63,7 @@ test("every advertised alias is passed to Claude verbatim", () => {
 });
 
 test("a model without effort control sends no effort flag", () => {
-    const prepared = { transcriptBlocks: [], attachmentPaths: [], attachmentImages: [], systemPromptPath: "/tmp/system.txt" };
+    const prepared = { transcriptBlocks: [], attachmentPaths: [], systemPromptPath: "/tmp/system.txt" };
     const { args: haiku } = providerArgs(prepared, "haiku", undefined, { thinkingDisplay: "summarized" });
     assert.equal(haiku.includes("--effort"), false);
     assert.equal(haiku[haiku.indexOf("--thinking-display") + 1], "summarized");
@@ -92,11 +93,7 @@ test("marks exactly the last history block with a 1h cache breakpoint", () => {
     const prepared = {
         directory: "/tmp/private",
         transcriptBlocks: Array.from({ length: 40 }, (_, index) => `{"record":${index}}`),
-        attachmentPaths: ["/tmp/private/a.png", "/tmp/private/b.png"],
-        attachmentImages: [
-            { name: "a.png", mimeType: "image/png", data: "AAAA" },
-            { name: "b.png", mimeType: "image/png", data: "BBBB" },
-        ],
+        attachmentPaths: [file("a.png", "AAAA"), file("b.png", "BBBB")],
         systemPromptPath: "/tmp/private/system-prompt.txt",
         toolNames: new Map(),
         transcriptBytes: 1,
@@ -110,14 +107,14 @@ test("marks exactly the last history block with a 1h cache breakpoint", () => {
     ]);
     assert.equal(prompt.at(-1).cache_control, undefined);
     // An empty history has nothing to mark; a marker with no block is invalid.
-    assert.deepEqual(providerArgs({ ...prepared, transcriptBlocks: [], attachmentPaths: [], attachmentImages: [] }, "sonnet", "low").prompt, []);
+    assert.deepEqual(providerArgs({ ...prepared, transcriptBlocks: [], attachmentPaths: [] }, "sonnet", "low").prompt, []);
 });
 
 test("the transcript breakpoint turns off only through a valid setting", () => {
     const prepared = {
         directory: "/tmp/private",
         transcriptBlocks: ['{"record":0}', '{"record":1}'],
-        attachmentPaths: [], attachmentImages: [],
+        attachmentPaths: [],
         systemPromptPath: "/tmp/private/system-prompt.txt",
         toolNames: new Map(),
         transcriptBytes: 1,
@@ -138,7 +135,7 @@ test("proposal MCP server launches the bridge through the hosting runtime", () =
     const prepared = {
         directory: "/tmp/private",
         transcriptBlocks: ['{"protocol":"test"}'],
-        attachmentPaths: [], attachmentImages: [],
+        attachmentPaths: [],
         systemPromptPath: "/tmp/private/system-prompt.txt",
         catalogPath: "/tmp/private/catalog.json",
         violationPath: "/tmp/private/violation",
@@ -195,7 +192,7 @@ test("asks for summarized thinking, which Claude Code otherwise returns empty", 
     const prepared = {
         directory: "/tmp/private",
         transcriptBlocks: ['{"record":0}'],
-        attachmentPaths: [], attachmentImages: [],
+        attachmentPaths: [],
         systemPromptPath: "/tmp/private/system-prompt.txt",
         toolNames: new Map(),
         transcriptBytes: 1,

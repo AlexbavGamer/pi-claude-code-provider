@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ClaudeCodeError } from "./errors.ts";
 import { scriptLaunch, type ScriptLaunch } from "./host-runtime.ts";
@@ -64,6 +66,8 @@ export function thinkingDisplay(environment: NodeJS.ProcessEnv = process.env): "
   throw new ClaudeCodeError("thinking_display_config", `${THINKING_DISPLAY_ENV} must be "summarized", "omitted", or "off"`);
 }
 
+const IMAGE_MIME: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
+
 type PromptBlock =
   | { type: "text"; text: string; cache_control?: typeof TRANSCRIPT_CACHE_CONTROL }
   | { type: "image"; source: { type: "base64"; media_type: string; data: string } };
@@ -111,9 +115,9 @@ export function providerArgs(
   // Inline base64 rather than an @-reference: a path Claude Code cannot resolve
   // (a Windows 8.3 short name, say) silently left the model with no image. Each
   // image is labelled with the name its image_attachment record carries.
-  const imageBlocks: PromptBlock[] = prepared.attachmentImages.flatMap(({ name, mimeType, data }): PromptBlock[] => [
-    { type: "text", text: `Image attachment ${name}:` },
-    { type: "image", source: { type: "base64", media_type: mimeType, data } },
+  const imageBlocks: PromptBlock[] = prepared.attachmentPaths.flatMap((path): PromptBlock[] => [
+    { type: "text", text: `Image attachment ${basename(path)}:` },
+    { type: "image", source: { type: "base64", media_type: IMAGE_MIME[extname(path).toLowerCase()] ?? "image/png", data: readFileSync(path).toString("base64") } },
   ]);
   // Keep the attachments after unchanged history and outside the breakpoint.
   const markedBlock = options.transcriptBreakpoint === false ? -1 : prepared.transcriptBlocks.length - 1;
