@@ -21,7 +21,7 @@ const SETTINGS = JSON.stringify({
   autoMemoryEnabled: false,
   totalTokensReminder: "off",
   switchModelsOnFlag: false,
-  enabledPlugins: { "agents-md@builtin": false, "telemetry@builtin": false },
+  enabledPlugins: { "agents-md@builtin": false, "telemetry@builtin": false, "plugin-authoring@builtin": false  },
 });
 export const EMPTY_MCP = JSON.stringify({ mcpServers: {} });
 export const BRIDGE_PATH = fileURLToPath(new URL("../bridge/mcp-proposal-server.js", import.meta.url));
@@ -113,7 +113,7 @@ export function providerArgs(
   // Quoted absolute references: Claude runs in Pi's session directory, where a
   // relative reference would resolve against the project, and the quotes keep a
   // temporary root containing spaces in one reference.
-  const imageRefs = prepared.attachmentPaths.map((path) => `@"${path}"`).join(" ");
+  const imageRefs = prepared.attachmentPaths.map((path) => `@"${path.replaceAll("\\", "/")}"`).join(" ");
   const imageInstruction = imageRefs
     ? ` Generated image attachments for image_attachment blocks: ${imageRefs}.`
     : "";
