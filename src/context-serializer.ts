@@ -150,6 +150,7 @@ export async function prepareRequestWithLimits(
     const systemPromptPath = join(directory, "system-prompt.txt");
     await writeFile(systemPromptPath, context.systemPrompt ?? "", { mode: 0o600, flag: "wx" });
     const attachmentPaths: string[] = [];
+    const attachmentImages: PreparedRequest["attachmentImages"] = [];
     const writtenImages = new Set<string>();
     let imageCount = 0;
     let imageBytes = 0;
@@ -232,6 +233,7 @@ export async function prepareRequestWithLimits(
               if (!imageStore) await writeFile(path, validated.bytes, { mode: 0o600, flag: "wx" });
               writtenImages.add(name);
               attachmentPaths.push(path);
+              attachmentImages.push({ name, mimeType: image.mimeType, data: image.data });
             }
             output.push({ type: "image_attachment", attachment: name, mimeType: image.mimeType } satisfies SerializedImage);
             break;
@@ -316,6 +318,7 @@ export async function prepareRequestWithLimits(
       imageStoreDirectory: imageStore?.directory,
       transcriptBlocks,
       attachmentPaths,
+      attachmentImages,
       systemPromptPath,
       catalogPath,
       violationPath,

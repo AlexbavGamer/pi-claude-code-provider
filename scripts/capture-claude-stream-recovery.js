@@ -203,6 +203,7 @@ async function captureScenario(scenario, executable) {
       directory,
       systemPromptPath: join(directory, "system-prompt.txt"),
       attachmentPaths: [],
+      attachmentImages: [],
       transcriptBlocks: ['{"role":"user","content":"Reply OK."}'],
       catalogPath: join(directory, "tools.json"),
       readyPath: join(directory, "mcp-ready"),

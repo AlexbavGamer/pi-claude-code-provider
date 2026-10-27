@@ -21,6 +21,8 @@ export interface PreparedRequest {
   imageStoreDirectory?: string;
   transcriptBlocks: string[];
   attachmentPaths: string[];
+  /** Same order as `attachmentPaths`; sent inline so Claude never has to resolve a path. */
+  attachmentImages: Array<{ name: string; mimeType: string; data: string }>;
   systemPromptPath: string;
   catalogPath?: string;
   violationPath?: string;

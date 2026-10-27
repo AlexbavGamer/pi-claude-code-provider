@@ -33,7 +33,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { claudeExecutable } from "../src/auth.ts";
 import { captureEnvironment, captureTimeout, spawnCaptureChild, stopCaptureChild } from "./lib/claude-capture.js";
 import { providerModels } from "../src/catalog.ts";
@@ -184,6 +184,7 @@ async function captureOnce(options, executable, home, project, imageStore) {
       directory,
       systemPromptPath: join(directory, "system-prompt.txt"),
       attachmentPaths,
+      attachmentImages: attachmentPaths.map((path) => ({ name: basename(path), mimeType: "image/png", data: PNG.toString("base64") })),
       transcriptBlocks: BLOCKS,
       ...(options.tools
         ? {
