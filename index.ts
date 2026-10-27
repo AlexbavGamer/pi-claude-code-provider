@@ -14,6 +14,7 @@ import { errorText, normalizeClaudeFailure } from "./src/errors.ts";
 import { formatDoctorSummary, probeBridge, type WebSearchStatus } from "./src/doctor.ts";
 import { flushMetricsLog, getLastRequestMetrics, getLastSearchMetrics, getMetricsLogError } from "./src/metrics.ts";
 import { readProviderPackage } from "./src/package-info.ts";
+import { extractPastedImages } from "./src/pasted-images.ts";
 import { createClaudeStream } from "./src/provider.ts";
 import { cleanupStaleRuntimeDirectories, createRuntimeDirectory } from "./src/runtime-directories.ts";
 import { SessionImageStore } from "./src/session-image-store.ts";
@@ -55,6 +56,8 @@ export default async function piClaudeCodeProvider(pi: ExtensionAPI): Promise<vo
   // because Pi's model runtime keeps only the newest provider.
   const sessions = sessionRegistry();
   let ownSessionId: string | undefined;
+  // Numbers pasted images across the session's sends: [image #1], [image #2], ...
+  let nextImageNumber = 1;
 
   const streamSimple = createClaudeStream(installation, {
     resolveSession: (request) => resolveSession(sessions, {
@@ -93,6 +96,7 @@ export default async function piClaudeCodeProvider(pi: ExtensionAPI): Promise<vo
   pi.on("session_start", (_event, ctx) => {
     searchOutputs.open();
     imageStore.open();
+    nextImageNumber = 1;
     // Another session reloading clears Pi-AI's registry for every extension in
     // the process, so ownership is re-asserted rather than claimed once.
     serveApiRegistry();
@@ -124,6 +128,16 @@ export default async function piClaudeCodeProvider(pi: ExtensionAPI): Promise<vo
       (notice) => activeRateLimitNotify?.(notice),
       (message) => ctx.ui.notify(message, "warning"),
     );
+  });
+
+  // Pi pastes a clipboard image as a temp-file path in the editor. Turn it into a
+  // real image plus an [image #N] marker, for this provider's models only.
+  pi.on("input", async (event, ctx) => {
+    if (event.source !== "interactive" || ctx.model?.provider !== PROVIDER) return { action: "continue" };
+    const pasted = await extractPastedImages(event.text, nextImageNumber);
+    if (pasted.images.length === 0) return { action: "continue" };
+    nextImageNumber = pasted.next;
+    return { action: "transform", text: pasted.text, images: [...(event.images ?? []), ...pasted.images] };
   });
 
   pi.on("session_shutdown", async () => {
